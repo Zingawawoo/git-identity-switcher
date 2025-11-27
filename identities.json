@@ -1,0 +1,22 @@
+{
+  "identities": [
+    {
+      "name": "Personal",
+      "git_name": "Your Name",
+      "git_email": "your_personal@example.com",
+      "ssh_key": "~/.ssh/id_personal"
+    },
+    {
+      "name": "Work",
+      "git_name": "Your Work Name",
+      "git_email": "your_work@example.com",
+      "ssh_key": "~/.ssh/id_work"
+    },
+    {
+      "name": "University",
+      "git_name": "Your Uni Name",
+      "git_email": "your_uni_email@example.com",
+      "ssh_key": "~/.ssh/id_uni"
+    }
+  ]
+}
