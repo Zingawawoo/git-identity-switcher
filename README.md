@@ -49,4 +49,4 @@ Run the application:
 python3 identity_switcher.py
 ```
 
-I could explain in depth what to do but if you need this tool I assumed you already know how ssh keys and git configs work.
+I could explain in depth what to do but if you need this tool I assume you already know how ssh keys and git configs work.
