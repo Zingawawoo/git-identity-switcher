@@ -99,6 +99,7 @@ You may create a Start Menu shortcut pointing to:
 %APPDATA%\GitIdentitySwitcher\git-identity-switcher.bat
 ```
 
+<<<<<<< HEAD
 ---
 
 # ▶️ Running the App
@@ -203,3 +204,6 @@ Licensed under MIT. See `LICENSE` for details.
 
 Contributions and issues are welcome!
 Feel free to submit PRs to improve functionality, UI design, or platform support.
+=======
+I could explain in depth what to do but if you need this tool I assume you already know how ssh keys and git configs work.
+>>>>>>> 9fd85a9e717bf6c9c5774c8a65489fcb85871ae1
