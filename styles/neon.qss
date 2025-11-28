@@ -1,166 +1,283 @@
-/* ================================
-   GLOBAL BASE
-   ================================ */
+/* ======================================
+   GLOBAL – warm pastel cat-core vibes
+   ====================================== */
 
 QWidget {
-    background-color: #020617;
-    color: #e5e7eb;
-    font-family: "Segoe UI", system-ui, sans-serif;
+    background-color: #f3e6d8;
+    color: #4b3a2c;
+    font-family: "Poppins", "Nunito", "Segoe UI", system-ui, -apple-system, sans-serif;
     font-size: 10pt;
 }
 
 QMainWindow {
-    background-color: #020617;
+    background: qradialgradient(
+        cx:0.5, cy:0.2, radius:1.0,
+        fx:0.5, fy:0.2,
+        stop:0 #fdf4e7,
+        stop:1 #f1dfcc
+    );
 }
 
-/* ================================
-   HEADER CARD
-   ================================ */
-
-#headerCard {
-    background-color: rgba(15, 23, 42, 0.94);
-    border-radius: 18px;
-    border: 1px solid rgba(148, 163, 184, 0.4);
+/* ScrollAreas */
+QScrollArea {
+    border: none;
+    background: transparent;
 }
 
-/* ================================
-   GLASS CARDS
-   ================================ */
-
-#glassCard {
-    background-color: rgba(15, 23, 42, 0.92);
-    border-radius: 18px;
-    border: 1px solid rgba(30, 64, 175, 0.7);
+QScrollBar:horizontal {
+    background: transparent;
+    height: 8px;
+}
+QScrollBar::handle:horizontal {
+    background: #d2bda6;
+    border-radius: 4px;
+}
+QScrollBar::add-line:horizontal,
+QScrollBar::sub-line:horizontal {
+    width: 0;
 }
 
-/* ================================
-   SECTION TITLES
-   ================================ */
+/* ======================================
+   CARDS & PANELS
+   ====================================== */
 
-QLabel.sectionTitle {
+#headerCard,
+#glassCard,
+#editPanel {
+    border-radius: 26px;
+    border: 1px solid rgba(188, 164, 134, 0.50);
+    background: rgba(255, 249, 240, 0.92);
+}
+
+/* Section title */
+.sectionTitle,
+QLabel[class="sectionTitle"] {
+    font-size: 11pt;
+    font-weight: 700;
+    color: #7a5b3f;
+    letter-spacing: 0.05em;
+}
+
+/* Status pill */
+#statusLabel {
     font-size: 9pt;
-    font-weight: 600;
-    letter-spacing: 0.8px;
-    color: #9ca3af;
+    color: #4b3a2c;
+    background: rgba(243, 215, 186, 0.70);
+    border-radius: 999px;
+    padding: 4px 10px;
 }
 
-/* Header text */
-
-QLabel#headerTitle {
-    font-size: 20pt;
-    font-weight: 600;
-    color: #f9fafb;
-}
-
-QLabel#headerSubtitle {
-    font-size: 10pt;
-    color: #9ca3af;
-}
-
-QLabel#statusLabel {
+/* Field labels */
+#fieldLabel,
+QLabel[class="fieldLabel"] {
     font-size: 9pt;
-    color: #6b7280;
+    font-weight: 500;
+    color: #8c6b4a;
 }
 
-/* ================================
+/* Edit panel title */
+#editPanelTitle {
+    font-size: 16pt;
+    font-weight: 800;
+    color: #4b3a2c;
+}
+
+/* ======================================
+   IDENTITY ORBS
+   ====================================== */
+
+#identityBubble {
+    border-radius: 999px;
+    border: 2px solid rgba(210, 184, 150, 0.50);
+    padding: 10px;
+    background: qradialgradient(
+        cx:0.5, cy:0.3, radius:0.95,
+        fx:0.5, fy:0.3,
+        stop:0 #fff9f0,
+        stop:1 #f2ddc7
+    );
+}
+
+#identityBubble[selected="true"] {
+    border-color: rgba(240, 180, 120, 0.95);
+}
+
+/* Hover soft tint */
+#identityBubble:hover {
+    background: qradialgradient(
+        cx:0.5, cy:0.25, radius:0.95,
+        fx:0.5, fy:0.25,
+        stop:0 #fffaf3,
+        stop:1 #eed2b6
+    );
+}
+
+/* Avatar orb */
+#identityAvatar {
+    font-family: "Poppins", "Nunito", "Segoe UI", system-ui;
+    font-size: 28px;
+    font-weight: 800;
+    border-radius: 48px;
+    background: qradialgradient(
+        cx:0.5, cy:0.25, radius:0.9,
+        fx:0.5, fy:0.25,
+        stop:0 #ffe4c4,
+        stop:1 #f0b68a
+    );
+    color: #4b3a2c;
+    border: 2px solid rgba(250, 220, 190, 1.0);
+}
+
+/* Name under orb */
+#identityName {
+    margin-top: 6px;
+    font-size: 10.5pt;
+    font-weight: 600;
+    color: #4b3a2c;
+}
+
+/* ======================================
+   '+' ORB
+   ====================================== */
+
+#addIdentityBubble {
+    border-radius: 999px;
+    border: 2px dashed rgba(210, 184, 150, 0.60);
+    padding: 10px;
+    background: qradialgradient(
+        cx:0.5, cy:0.3, radius:0.95,
+        fx:0.5, fy:0.3,
+        stop:0 #fff6eb,
+        stop:1 #f1dcc6
+    );
+}
+
+#addIdentityBubble:hover {
+    border-color: rgba(230, 190, 140, 0.95);
+    background: qradialgradient(
+        cx:0.5, cy:0.25, radius:0.95,
+        fx:0.5, fy:0.25,
+        stop:0 #fff9f2,
+        stop:1 #eed2b6
+    );
+}
+
+/* Circular plus */
+#addIdentityPlus {
+    border-radius: 48px;
+    border: 1px dashed rgba(188, 164, 134, 0.85);
+    color: #4b3a2c;
+    font-size: 30px;
+    font-weight: 700;
+    background: rgba(255, 249, 240, 0.9);
+}
+
+/* Soft rounded badge for title (no sharp edges) */
+#addIdentityTitleBadge {
+    border-radius: 999px;
+    background: rgba(243, 215, 186, 0.70);
+}
+
+#addIdentityTitle {
+    font-size: 10.5pt;
+    font-weight: 700;
+    color: #4b3a2c;
+    padding: 2px 4px;
+}
+
+#addIdentitySubtitle {
+    font-size: 8.8pt;
+    color: #8c6b4a;
+}
+
+/* ======================================
    BUTTONS
-   ================================ */
+   ====================================== */
 
 QPushButton {
     border-radius: 999px;
-    padding: 6px 16px;
-    border: none;
-    background-color: #111827;
-    color: #e5e7eb;
+    padding: 8px 24px;
+    font-size: 9pt;
+    font-weight: 600;
+    border: 1px solid transparent;
+    background-color: #f0e0cf;
+    color: #4b3a2c;
 }
 
-QPushButton:hover {
-    background-color: #1f2937;
+QPushButton:disabled {
+    background-color: #e5d4c1;
+    color: #b79f84;
 }
 
-/* Accent gradient */
+QPushButton:pressed {
+    background-color: #e3ceb7;
+}
+
+/* Accent (Select / Save) */
 QPushButton[class="accent"] {
-    background-color: qlineargradient(
+    background: qlineargradient(
         x1:0, y1:0, x2:1, y2:1,
-        stop:0 #38bdf8,
-        stop:1 #a855f7
+        stop:0 #f4a261,
+        stop:1 #f6bd77
     );
-    color: #0b1120;
-    font-weight: 600;
+    color: #4b3a2c;
+    border-color: rgba(230, 149, 92, 0.9);
 }
-
 QPushButton[class="accent"]:hover {
-    background-color: qlineargradient(
+    background: qlineargradient(
         x1:0, y1:0, x2:1, y2:1,
-        stop:0 #0ea5e9,
-        stop:1 #c084fc
+        stop:0 #f6b27b,
+        stop:1 #f9c48b
     );
 }
 
-/* Secondary */
+/* Secondary (Edit / Cancel / Browse) */
 QPushButton[class="secondary"] {
-    background-color: rgba(15, 23, 42, 0.95);
-    border: 1px solid rgba(148, 163, 184, 0.5);
+    background-color: #f6e6d6;
+    border-color: #e0c7ab;
+    color: #4b3a2c;
 }
-
 QPushButton[class="secondary"]:hover {
-    background-color: rgba(30, 64, 175, 0.7);
+    background-color: #f0dac6;
 }
 
-/* Danger */
+/* Danger (Delete) */
 QPushButton[class="danger"] {
-    background-color: #ef4444;
-    color: #0b1120;
-    font-weight: 600;
+    background-color: #f18a89;
+    border-color: #ef6b6a;
+    color: #4b1f1f;
 }
-
 QPushButton[class="danger"]:hover {
-    background-color: #f97373;
+    background-color: #f5a5a4;
 }
 
-/* ================================
+/* ======================================
    INPUTS
-   ================================ */
+   ====================================== */
 
 QLineEdit {
-    background-color: rgba(15, 23, 42, 0.96);
-    border-radius: 8px;
-    border: 1px solid rgba(55, 65, 81, 0.9);
-    padding: 4px 8px;
-    selection-background-color: rgba(56, 189, 248, 0.4);
+    border-radius: 14px;
+    border: 1px solid #e0c7ab;
+    padding: 6px 12px;
+    background-color: #fffaf3;
+    color: #4b3a2c;
+    selection-background-color: #f4a261;
+    selection-color: #2b2018;
 }
 
 QLineEdit:focus {
-    border: 1px solid #38bdf8;
+    border-color: #f4a261;
 }
 
-/* ================================
-   TABLE
-   ================================ */
+/* ======================================
+   SPLASH
+   ====================================== */
 
-QTableWidget {
-    background-color: rgba(15, 23, 42, 0.96);
-    border-radius: 10px;
-    border: 1px solid rgba(30, 64, 175, 0.7);
-    gridline-color: rgba(30, 64, 175, 0.7);
-    selection-background-color: rgba(56, 189, 248, 0.35);
-    selection-color: #f9fafb;
-}
-
-QHeaderView::section {
-    background-color: transparent;
-    color: #9ca3af;
-    border: none;
-    padding: 4px 6px;
-    font-size: 9pt;
-}
-
-/* ================================
-   DIALOGS
-   ================================ */
-
-QDialog {
-    background-color: #020617;
-    border-radius: 18px;
-    border: 1px solid rgba(37, 99, 235, 0.9);
+#splashOverlay {
+    background: qradialgradient(
+        cx:0.5, cy:0.3, radius:1.0,
+        fx:0.5, fy:0.3,
+        stop:0 rgba(255, 249, 240, 0.98),
+        stop:1 rgba(243, 230, 216, 0.96)
+    );
 }

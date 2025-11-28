@@ -30,13 +30,13 @@ def copy_app_files(source_dir: Path, target_dir: Path) -> None:
     if not target_dir.exists():
         target_dir.mkdir(parents=True, exist_ok=True)
 
-    # ✅ include config_dialog.py now that we're using Qt dialogs
+    # Core application files. We now rely entirely on the inline card editor,
+    # so config_dialog.py is no longer shipped.
     python_files = [
         "identity_switcher.py",
         "model.py",
         "views.py",
-        "config_dialog.py",
-        "widgets.py"
+        "widgets.py",
     ]
 
     for name in python_files:
@@ -57,7 +57,7 @@ def copy_app_files(source_dir: Path, target_dir: Path) -> None:
         shutil.copytree(icons_src, icons_dst)
         print("[INFO] Copied icons to", icons_dst)
 
-    # ✅ Copy styles directory (for neon.qss)
+    # Copy styles directory (for neon.qss)
     styles_src: Path = source_dir / "styles"
     styles_dst: Path = target_dir / "styles"
 

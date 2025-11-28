@@ -1,15 +1,16 @@
 from __future__ import annotations
 
-from typing import Callable, Dict, List, Optional, Tuple
+from pathlib import Path
+from typing import Callable, Dict, Optional
 
 from PySide6.QtCore import QEasingCurve, QPropertyAnimation, Qt
 from PySide6.QtWidgets import (
+    QFileDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QPushButton,
-    QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -17,8 +18,7 @@ from PySide6.QtWidgets import (
 
 class GlassFrame(QFrame):
     """
-    Simple 'glass' container.
-    QSS drives the styling via #headerCard / #glassCard.
+    Soft rounded container whose look is entirely driven by QSS.
     """
 
     def __init__(self, parent: Optional[QWidget] = None, variant: str = "glass") -> None:
@@ -32,8 +32,8 @@ class GlassFrame(QFrame):
 
 class NeonButton(QPushButton):
     """
-    Button that uses the 'class' dynamic property so QSS can style it
-    as accent / secondary / danger.
+    Button with a 'class' dynamic property so QSS can theme
+    accent / secondary / danger variants.
     """
 
     def __init__(
@@ -50,246 +50,98 @@ class NeonButton(QPushButton):
 
 class IdentityCard(GlassFrame):
     """
-    A single identity "card" like a console login tile.
+    PS5-style identity orb.
 
-    - Click anywhere on the card header to expand / collapse actions.
-    - Expanded area contains:
-        * Select
-        * Edit (switches to inline editor)
-        * Delete
-    - Edit mode lets you change fields and save/cancel inline.
+    - Circular avatar + name underneath.
+    - Emits `on_clicked(index)` when pressed.
+    - Has a 'selected' state so QSS can react.
     """
 
     def __init__(
         self,
         index: int,
         identity: Dict,
-        on_select: Callable[[int], None],
-        on_update: Callable[[int, Dict], None],
-        on_delete: Callable[[int], None],
+        on_clicked: Callable[[int], None],
         parent: Optional[QWidget] = None,
     ) -> None:
         super().__init__(parent, variant="glass")
+        self.setObjectName("identityBubble")
 
         self._index: int = index
         self._identity: Dict = identity
-        self._on_select: Callable[[int], None] = on_select
-        self._on_update: Callable[[int, Dict], None] = on_update
-        self._on_delete: Callable[[int], None] = on_delete
+        self._on_clicked: Callable[[int], None] = on_clicked
+        self._selected: bool = False
 
-        self._expanded: bool = False
+        self.avatar_label: QLabel
+        self.name_label: QLabel
 
         self._build_ui()
         self._sync_labels()
 
-    # ---------- construction ---------- #
-
     def _build_ui(self) -> None:
         layout: QVBoxLayout = QVBoxLayout(self)
-        layout.setContentsMargins(14, 12, 14, 12)
+        layout.setContentsMargins(18, 18, 18, 18)
         layout.setSpacing(8)
+        layout.setAlignment(Qt.AlignCenter)
 
-        # Header (always visible)
-        header_row: QHBoxLayout = QHBoxLayout()
-        header_row.setSpacing(6)
+        self.avatar_label = QLabel(self)
+        self.avatar_label.setObjectName("identityAvatar")
+        self.avatar_label.setFixedSize(96, 96)
+        self.avatar_label.setAlignment(Qt.AlignCenter)
 
-        self.name_label: QLabel = QLabel(self)
+        self.name_label = QLabel(self)
         self.name_label.setObjectName("identityName")
+        self.name_label.setAlignment(Qt.AlignHCenter)
 
-        self.email_label: QLabel = QLabel(self)
-        self.email_label.setObjectName("identityEmail")
-
-        header_block: QVBoxLayout = QVBoxLayout()
-        header_block.setSpacing(2)
-        header_block.addWidget(self.name_label)
-        header_block.addWidget(self.email_label)
-
-        header_row.addLayout(header_block)
-        header_row.addStretch(1)
-
-        hint_label: QLabel = QLabel("▼", self)
-        hint_label.setObjectName("identityChevron")
-        header_row.addWidget(hint_label)
-
-        header_container: QWidget = QWidget(self)
-        header_container.setLayout(header_row)
-        header_container.setObjectName("identityHeader")
-        header_container.mousePressEvent = self._toggle_expanded  # type: ignore[assignment]
-
-        layout.addWidget(header_container)
-
-        # Expandable panel
-        self.panel: QWidget = QWidget(self)
-        self.panel.setMaximumHeight(0)
-        self.panel.setVisible(False)
-
-        panel_layout: QVBoxLayout = QVBoxLayout(self.panel)
-        panel_layout.setContentsMargins(0, 4, 0, 0)
-        panel_layout.setSpacing(6)
-
-        self.stack: QStackedWidget = QStackedWidget(self.panel)
-        panel_layout.addWidget(self.stack)
-
-        # Page 0: action buttons
-        actions_page: QWidget = QWidget(self.stack)
-        actions_layout: QHBoxLayout = QHBoxLayout(actions_page)
-        actions_layout.setContentsMargins(0, 0, 0, 0)
-        actions_layout.setSpacing(8)
-
-        select_btn: NeonButton = NeonButton(
-            "Use this identity",
-            actions_page,
-            variant="accent",
-        )
-        edit_btn: NeonButton = NeonButton(
-            "Edit",
-            actions_page,
-            variant="secondary",
-        )
-        delete_btn: NeonButton = NeonButton(
-            "Delete",
-            actions_page,
-            variant="danger",
-        )
-
-        select_btn.clicked.connect(self._on_select_clicked)
-        edit_btn.clicked.connect(self._enter_edit_mode)
-        delete_btn.clicked.connect(self._on_delete_clicked)
-
-        actions_layout.addWidget(select_btn)
-        actions_layout.addWidget(edit_btn)
-        actions_layout.addWidget(delete_btn)
-
-        self.stack.addWidget(actions_page)
-
-        # Page 1: inline editor
-        edit_page: QWidget = QWidget(self.stack)
-        edit_layout: QVBoxLayout = QVBoxLayout(edit_page)
-        edit_layout.setContentsMargins(0, 0, 0, 0)
-        edit_layout.setSpacing(6)
-
-        self.edit_name: QLineEdit = QLineEdit(edit_page)
-        self.edit_email: QLineEdit = QLineEdit(edit_page)
-        self.edit_git_name: QLineEdit = QLineEdit(edit_page)
-        self.edit_ssh_key: QLineEdit = QLineEdit(edit_page)
-
-        # Simple stacked vertical form
-        edit_layout.addWidget(self._make_field("Profile name", self.edit_name))
-        edit_layout.addWidget(self._make_field("Git user.name", self.edit_git_name))
-        edit_layout.addWidget(self._make_field("Git user.email", self.edit_email))
-        edit_layout.addWidget(self._make_field("SSH key path", self.edit_ssh_key))
-
-        buttons_row: QHBoxLayout = QHBoxLayout()
-        buttons_row.setSpacing(8)
-
-        save_btn: NeonButton = NeonButton("Save", edit_page, variant="accent")
-        cancel_btn: NeonButton = NeonButton("Cancel", edit_page, variant="secondary")
-
-        save_btn.clicked.connect(self._save_edits)
-        cancel_btn.clicked.connect(self._exit_edit_mode)
-
-        buttons_row.addWidget(save_btn)
-        buttons_row.addWidget(cancel_btn)
-        edit_layout.addLayout(buttons_row)
-
-        self.stack.addWidget(edit_page)
-
-        layout.addWidget(self.panel)
-
-        # Animation for expanding / collapsing
-        self._panel_anim: QPropertyAnimation = QPropertyAnimation(
-            self.panel,
-            b"maximumHeight",
-            self,
-        )
-        self._panel_anim.setDuration(200)
-        self._panel_anim.setEasingCurve(QEasingCurve.OutCubic)
-
-    def _make_field(self, label_text: str, line_edit: QLineEdit) -> QWidget:
-        container: QWidget = QWidget(self)
-        row: QVBoxLayout = QVBoxLayout(container)
-        row.setContentsMargins(0, 0, 0, 0)
-        row.setSpacing(2)
-
-        label: QLabel = QLabel(label_text, container)
-        label.setObjectName("fieldLabel")
-
-        row.addWidget(label)
-        row.addWidget(line_edit)
-        return container
-
-    # ---------- state sync ---------- #
+        layout.addWidget(self.avatar_label)
+        layout.addWidget(self.name_label)
 
     def _sync_labels(self) -> None:
-        name: str = self._identity.get("name", "Unnamed")
-        git_email: str = self._identity.get("git_email", "")
-        git_name: str = self._identity.get("git_name", "")
+        name: str = self._identity.get("name", "").strip()
+        git_name: str = self._identity.get("git_name", "").strip()
 
-        display_name: str = name or git_name or "Unnamed"
+        if name != "":
+            display_name: str = name
+        elif git_name != "":
+            display_name = git_name
+        else:
+            display_name = "Unnamed"
+
         self.name_label.setText(display_name)
 
-        if git_email:
-            self.email_label.setText(git_email)
+        if display_name != "":
+            self.avatar_label.setText(display_name[0].upper())
         else:
-            self.email_label.setText("No email set")
+            self.avatar_label.setText("?")
 
-    def _sync_edit_fields(self) -> None:
-        self.edit_name.setText(self._identity.get("name", ""))
-        self.edit_git_name.setText(self._identity.get("git_name", ""))
-        self.edit_email.setText(self._identity.get("git_email", ""))
-        self.edit_ssh_key.setText(self._identity.get("ssh_key_path", ""))
+    # ---------- public API ---------- #
 
-    # ---------- actions ---------- #
+    def update_identity(self, identity: Dict) -> None:
+        self._identity = identity
+        self._sync_labels()
 
-    def _toggle_expanded(self, event) -> None:  # type: ignore[override]
-        self.set_expanded(not self._expanded)
-
-    def set_expanded(self, expanded: bool) -> None:
-        if expanded == self._expanded:
+    def set_selected(self, selected: bool) -> None:
+        if selected == self._selected:
             return
 
-        self._expanded = expanded
-        self.panel.setVisible(True)
+        self._selected = selected
 
-        start: int = self.panel.maximumHeight()
-        end: int = 160 if expanded else 0
+        # Expose to QSS
+        self.setProperty("selected", selected)
+        self.style().unpolish(self)
+        self.style().polish(self)
 
-        self._panel_anim.stop()
-        self._panel_anim.setStartValue(start)
-        self._panel_anim.setEndValue(end)
-        self._panel_anim.start()
+    # ---------- events ---------- #
 
-    def _on_select_clicked(self) -> None:
-        self._on_select(self._index)
-
-    def _on_delete_clicked(self) -> None:
-        self._on_delete(self._index)
-
-    def _enter_edit_mode(self) -> None:
-        self._sync_edit_fields()
-        self.stack.setCurrentIndex(1)
-        if not self._expanded:
-            self.set_expanded(True)
-
-    def _exit_edit_mode(self) -> None:
-        self.stack.setCurrentIndex(0)
-
-    def _save_edits(self) -> None:
-        updated: Dict = dict(self._identity)
-        updated["name"] = self.edit_name.text().strip()
-        updated["git_name"] = self.edit_git_name.text().strip()
-        updated["git_email"] = self.edit_email.text().strip()
-        updated["ssh_key_path"] = self.edit_ssh_key.text().strip()
-
-        self._identity = updated
-        self._sync_labels()
-        self._on_update(self._index, updated)
-        self._exit_edit_mode()
+    def mousePressEvent(self, event) -> None:  # type: ignore[override]
+        if event.button() == Qt.LeftButton:
+            self._on_clicked(self._index)
+        super().mousePressEvent(event)
 
 
 class AddIdentityCard(GlassFrame):
     """
-    Special card that creates a new identity when clicked.
+    '+' orb bubble for creating a new identity.
     """
 
     def __init__(
@@ -298,27 +150,185 @@ class AddIdentityCard(GlassFrame):
         parent: Optional[QWidget] = None,
     ) -> None:
         super().__init__(parent, variant="glass")
+        self.setObjectName("addIdentityBubble")
+
         self._on_add: Callable[[], None] = on_add
 
         layout: QVBoxLayout = QVBoxLayout(self)
-        layout.setContentsMargins(16, 16, 16, 16)
-        layout.setSpacing(4)
+        layout.setContentsMargins(18, 18, 18, 18)
+        layout.setSpacing(8)
+        layout.setAlignment(Qt.AlignCenter)
 
-        title: QLabel = QLabel("+ New identity", self)
-        title.setObjectName("addIdentityTitle")
+        plus_label: QLabel = QLabel("+", self)
+        plus_label.setObjectName("addIdentityPlus")
+        plus_label.setAlignment(Qt.AlignCenter)
+        plus_label.setFixedSize(96, 96)
 
-        subtitle: QLabel = QLabel(
+        badge_container: QWidget = QWidget(self)
+        badge_container.setObjectName("addIdentityTitleBadge")
+        badge_layout: QVBoxLayout = QVBoxLayout(badge_container)
+        badge_layout.setContentsMargins(12, 4, 12, 4)
+        badge_layout.setSpacing(0)
+
+        title_label: QLabel = QLabel("New identity", badge_container)
+        title_label.setObjectName("addIdentityTitle")
+        title_label.setAlignment(Qt.AlignHCenter)
+        badge_layout.addWidget(title_label)
+
+        subtitle_label: QLabel = QLabel(
             "Create a new Git + SSH profile.",
             self,
         )
-        subtitle.setObjectName("addIdentitySubtitle")
-        subtitle.setWordWrap(True)
+        subtitle_label.setObjectName("addIdentitySubtitle")
+        subtitle_label.setAlignment(Qt.AlignHCenter)
+        subtitle_label.setWordWrap(True)
 
-        layout.addWidget(title)
-        layout.addWidget(subtitle)
-        layout.addStretch(1)
+        layout.addWidget(plus_label)
+        layout.addWidget(badge_container)
+        layout.addWidget(subtitle_label)
 
     def mousePressEvent(self, event) -> None:  # type: ignore[override]
         if event.button() == Qt.LeftButton:
             self._on_add()
         super().mousePressEvent(event)
+
+
+class EditPanel(GlassFrame):
+    """
+    Full-page editor form.
+
+    - Shows name / git_name / email / ssh_key fields.
+    - Exposes set_identity() + collect_data().
+    - Has Save / Cancel callbacks provided by MainWindow.
+    """
+
+    def __init__(
+        self,
+        on_save: Callable[[], None],
+        on_cancel: Callable[[], None],
+        parent: Optional[QWidget] = None,
+    ) -> None:
+        super().__init__(parent, variant="glass")
+        self.setObjectName("editPanel")
+
+        self._on_save: Callable[[], None] = on_save
+        self._on_cancel: Callable[[], None] = on_cancel
+
+        self._title_label: QLabel
+        self.name_edit: QLineEdit
+        self.git_name_edit: QLineEdit
+        self.email_edit: QLineEdit
+        self.ssh_key_edit: QLineEdit
+
+        self._build_ui()
+
+    def _build_ui(self) -> None:
+        layout: QVBoxLayout = QVBoxLayout(self)
+        layout.setContentsMargins(24, 20, 24, 20)
+        layout.setSpacing(12)
+
+        self._title_label = QLabel("Edit profile", self)
+        self._title_label.setObjectName("editPanelTitle")
+        layout.addWidget(self._title_label)
+
+        self.name_edit = self._add_field(layout, "Profile name")
+        self.git_name_edit = self._add_field(layout, "Git user.name")
+        self.email_edit = self._add_field(layout, "Git user.email")
+
+        # SSH key row with Browse button
+        ssh_container: QWidget = QWidget(self)
+        ssh_layout: QVBoxLayout = QVBoxLayout(ssh_container)
+        ssh_layout.setContentsMargins(0, 0, 0, 0)
+        ssh_layout.setSpacing(4)
+
+        ssh_label: QLabel = QLabel("SSH key path", ssh_container)
+        ssh_label.setObjectName("fieldLabel")
+
+        ssh_row: QHBoxLayout = QHBoxLayout()
+        ssh_row.setContentsMargins(0, 0, 0, 0)
+        ssh_row.setSpacing(8)
+
+        self.ssh_key_edit = QLineEdit(ssh_container)
+        browse_btn: NeonButton = NeonButton(
+            "Browse…",
+            ssh_container,
+            variant="secondary",
+        )
+        browse_btn.clicked.connect(self._browse_ssh_key)
+
+        ssh_row.addWidget(self.ssh_key_edit, 1)
+        ssh_row.addWidget(browse_btn)
+
+        ssh_layout.addWidget(ssh_label)
+        ssh_layout.addLayout(ssh_row)
+
+        layout.addWidget(ssh_container)
+
+        # Button row
+        buttons_row: QHBoxLayout = QHBoxLayout()
+        buttons_row.setSpacing(10)
+        buttons_row.setAlignment(Qt.AlignRight)
+
+        cancel_btn: NeonButton = NeonButton("Cancel", self, variant="secondary")
+        save_btn: NeonButton = NeonButton("Save", self, variant="accent")
+
+        cancel_btn.clicked.connect(self._on_cancel)
+        save_btn.clicked.connect(self._on_save)
+
+        buttons_row.addWidget(cancel_btn)
+        buttons_row.addWidget(save_btn)
+
+        layout.addLayout(buttons_row)
+
+    def _add_field(self, root: QVBoxLayout, label_text: str) -> QLineEdit:
+        container: QWidget = QWidget(self)
+        vbox: QVBoxLayout = QVBoxLayout(container)
+        vbox.setContentsMargins(0, 0, 0, 0)
+        vbox.setSpacing(4)
+
+        label: QLabel = QLabel(label_text, container)
+        label.setObjectName("fieldLabel")
+        edit: QLineEdit = QLineEdit(container)
+
+        vbox.addWidget(label)
+        vbox.addWidget(edit)
+        root.addWidget(container)
+
+        return edit
+
+    # ---------- SSH key browsing ---------- #
+
+    def _browse_ssh_key(self) -> None:
+        start_dir: Path = Path.home() / ".ssh"
+        if start_dir.exists():
+            initial: str = str(start_dir)
+        else:
+            initial = str(Path.home())
+
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select SSH key",
+            initial,
+            "SSH keys (*)",
+        )
+        if file_path:
+            self.ssh_key_edit.setText(file_path)
+
+    # ---------- public helpers ---------- #
+
+    def set_title(self, text: str) -> None:
+        self._title_label.setText(text)
+
+    def set_identity(self, identity: Dict) -> None:
+        self.name_edit.setText(identity.get("name", ""))
+        self.git_name_edit.setText(identity.get("git_name", ""))
+        self.email_edit.setText(identity.get("git_email", ""))
+        self.ssh_key_edit.setText(identity.get("ssh_key", ""))
+
+    def collect_data(self) -> Dict[str, str]:
+        data: Dict[str, str] = {}
+        data["name"] = self.name_edit.text().strip()
+        data["git_name"] = self.git_name_edit.text().strip()
+        data["git_email"] = self.email_edit.text().strip()
+        data["ssh_key"] = self.ssh_key_edit.text().strip()
+        return data
