@@ -1,14 +1,16 @@
+from __future__ import annotations
+
 import os
 import tkinter as tk
-from tkinter import messagebox, filedialog
-from typing import List, Dict, Callable
+from tkinter import filedialog, messagebox, ttk
+from typing import List, Dict, Callable, Optional
 
 from model import apply_identity
 
 
-class HomeView(tk.Frame):
+class HomeView(ttk.Frame):
     """
-    Home screen: shows buttons for each identity + 'Configure' button.
+    Home screen: quick switch between identities.
     """
 
     def __init__(
@@ -16,96 +18,133 @@ class HomeView(tk.Frame):
         master: tk.Misc,
         get_identities: Callable[[], List[Dict]],
         open_config_cb: Callable[[], None],
+        quit_cb: Callable[[], None],
     ) -> None:
-        super().__init__(master, bg="#0d1117")
-        self.get_identities = get_identities
-        self.open_config_cb = open_config_cb
+        super().__init__(master)
+        self.get_identities: Callable[[], List[Dict]] = get_identities
+        self.open_config_cb: Callable[[], None] = open_config_cb
+        self.quit_cb: Callable[[], None] = quit_cb
 
-        title: tk.Label = tk.Label(
-            self,
+        self._build_ui()
+        self.refresh_identities()
+
+    def _build_ui(self) -> None:
+        self.configure(padding=16)
+
+        # Top section
+        header_frame: ttk.Frame = ttk.Frame(self)
+        header_frame.pack(fill="x", pady=(0, 12))
+
+        title_label: ttk.Label = ttk.Label(
+            header_frame,
             text="Git Identity Switcher",
-            bg="#0d1117",
-            fg="white",
             font=("Segoe UI", 16, "bold"),
         )
-        title.pack(pady=(16, 4))
+        title_label.pack(side="left")
 
-        subtitle: tk.Label = tk.Label(
-            self,
-            text="Click a profile to switch your Git + SSH identity.",
-            bg="#0d1117",
-            fg="#8b949e",
-            font=("Segoe UI", 10),
-        )
-        subtitle.pack(pady=(0, 12))
-
-        self.buttons_frame: tk.Frame = tk.Frame(self, bg="#0d1117")
-        self.buttons_frame.pack(fill="both", expand=True, padx=24)
-
-        bottom: tk.Frame = tk.Frame(self, bg="#0d1117")
-        bottom.pack(fill="x", pady=12)
-
-        config_btn: tk.Button = tk.Button(
-            bottom,
-            text="Configure identities…",
-            command=self.open_config_cb,
-            bg="#21262d",
-            fg="white",
-            activebackground="#30363d",
-            relief="flat",
-            width=20,
-        )
-        config_btn.pack(side="left", padx=20)
-
-        hint: tk.Label = tk.Label(
-            bottom,
-            text="Configured via identities.json",
-            bg="#0d1117",
-            fg="#6e7681",
+        subtitle_label: ttk.Label = ttk.Label(
+            header_frame,
+            text="Quickly switch between your Git + SSH profiles",
             font=("Segoe UI", 9),
         )
-        hint.pack(side="right", padx=20)
+        subtitle_label.pack(side="left", padx=(12, 0))
 
-        self.render_buttons()
+        # Middle section: list of identities
+        middle_frame: ttk.Frame = ttk.Frame(self)
+        middle_frame.pack(fill="both", expand=True)
 
-    def render_buttons(self) -> None:
-        """Render one button per identity."""
-        for child in self.buttons_frame.winfo_children():
-            child.destroy()
+        list_frame: ttk.LabelFrame = ttk.LabelFrame(
+            middle_frame,
+            text="Available identities",
+            padding=8,
+        )
+        list_frame.pack(fill="both", expand=True)
 
+        self.listbox: tk.Listbox = tk.Listbox(
+            list_frame,
+            activestyle="dotbox",
+            height=8,
+        )
+        self.listbox.pack(side="left", fill="both", expand=True)
+
+        scrollbar: ttk.Scrollbar = ttk.Scrollbar(
+            list_frame,
+            orient="vertical",
+            command=self.listbox.yview,
+        )
+        scrollbar.pack(side="right", fill="y")
+        self.listbox.configure(yscrollcommand=scrollbar.set)
+
+        # Bottom buttons
+        button_frame: ttk.Frame = ttk.Frame(self)
+        button_frame.pack(fill="x", pady=(12, 0))
+
+        self.switch_button: ttk.Button = ttk.Button(
+            button_frame,
+            text="Switch to selected",
+            command=self._on_switch_clicked,
+        )
+        self.switch_button.pack(side="left")
+
+        self.config_button: ttk.Button = ttk.Button(
+            button_frame,
+            text="Manage identities…",
+            command=self.open_config_cb,
+        )
+        self.config_button.pack(side="left", padx=(8, 0))
+
+        self.quit_button: ttk.Button = ttk.Button(
+            button_frame,
+            text="Quit",
+            command=self.quit_cb,
+        )
+        self.quit_button.pack(side="right")
+
+    def refresh_identities(self) -> None:
+        self.listbox.delete(0, tk.END)
         identities: List[Dict] = self.get_identities()
+        if len(identities) == 0:
+            self.listbox.insert(tk.END, "No identities configured yet.")
+            self.listbox.configure(state="disabled")
+        else:
+            self.listbox.configure(state="normal")
+            for ident in identities:
+                label: str = "{0}  —  {1}".format(
+                    ident.get("name", "Unnamed"),
+                    ident.get("git_email", ""),
+                )
+                self.listbox.insert(tk.END, label)
 
-        if not identities:
-            tk.Label(
-                self.buttons_frame,
-                text="No identities yet. Click 'Configure identities…' to add one.",
-                bg="#0d1117",
-                fg="#8b949e",
-            ).pack(pady=20)
+    def _on_switch_clicked(self) -> None:
+        identities: List[Dict] = self.get_identities()
+        if len(identities) == 0:
+            messagebox.showinfo(
+                "No identities",
+                "You have not configured any identities yet.\n\n"
+                "Click 'Manage identities…' to add one.",
+            )
             return
 
-        for ident in identities:
-            label_text: str = f"{ident.get('name', '')}  ({ident.get('git_email', '')})"
-            btn: tk.Button = tk.Button(
-                self.buttons_frame,
-                text=label_text,
-                font=("Segoe UI", 12),
-                width=40,
-                height=2,
-                bg="#21262d",
-                fg="white",
-                activebackground="#30363d",
-                relief="flat",
-                command=lambda ident=ident: apply_identity(ident),
+        selection: Optional[int]
+        try:
+            selection = self.listbox.curselection()[0]
+        except IndexError:
+            selection = None
+
+        if selection is None:
+            messagebox.showwarning(
+                "No selection",
+                "Please select an identity from the list.",
             )
-            btn.pack(pady=6)
+            return
+
+        identity: Dict = identities[selection]
+        apply_identity(identity)
 
 
-class ConfigView(tk.Frame):
+class ConfigView(ttk.Frame):
     """
-    Configuration screen:
-    - List of identities
-    - Form to edit / add
+    Configuration screen: add / edit / delete identities.
     """
 
     def __init__(
@@ -115,217 +154,202 @@ class ConfigView(tk.Frame):
         set_identities: Callable[[List[Dict]], None],
         back_cb: Callable[[], None],
     ) -> None:
-        super().__init__(master, bg="#0d1117")
-        self.get_identities = get_identities
-        self.set_identities = set_identities
-        self.back_cb = back_cb
+        super().__init__(master)
+        self.get_identities: Callable[[], List[Dict]] = get_identities
+        self.set_identities: Callable[[List[Dict]], None] = set_identities
+        self.back_cb: Callable[[], None] = back_cb
 
-        self.current_index: int | None = None
+        self.current_index: Optional[int] = None
 
-        header: tk.Frame = tk.Frame(self, bg="#0d1117")
-        header.pack(fill="x", pady=(8, 4), padx=10)
+        self._build_ui()
+        self.refresh_list()
 
-        title: tk.Label = tk.Label(
-            header,
-            text="Configure Identities",
-            bg="#0d1117",
-            fg="white",
+    def _build_ui(self) -> None:
+        self.configure(padding=16)
+
+        top_frame: ttk.Frame = ttk.Frame(self)
+        top_frame.pack(fill="x", pady=(0, 12))
+
+        title_label: ttk.Label = ttk.Label(
+            top_frame,
+            text="Manage identities",
             font=("Segoe UI", 14, "bold"),
         )
-        title.pack(side="left")
+        title_label.pack(side="left")
 
-        back_btn: tk.Button = tk.Button(
-            header,
+        back_button: ttk.Button = ttk.Button(
+            top_frame,
             text="← Back",
             command=self.back_cb,
-            bg="#21262d",
-            fg="white",
-            activebackground="#30363d",
-            relief="flat",
-            width=10,
         )
-        back_btn.pack(side="right")
+        back_button.pack(side="right")
 
-        body: tk.Frame = tk.Frame(self, bg="#0d1117")
-        body.pack(fill="both", expand=True, padx=10, pady=8)
+        main_frame: ttk.Frame = ttk.Frame(self)
+        main_frame.pack(fill="both", expand=True)
 
-        # Left: listbox
-        left: tk.Frame = tk.Frame(body, bg="#0d1117")
-        left.pack(side="left", fill="y")
-
-        tk.Label(
-            left,
+        # Left: list of identities
+        list_frame: ttk.LabelFrame = ttk.LabelFrame(
+            main_frame,
             text="Profiles",
-            bg="#0d1117",
-            fg="#8b949e",
-        ).pack(anchor="w", pady=(0, 4))
+            padding=8,
+        )
+        list_frame.pack(side="left", fill="y")
 
         self.listbox: tk.Listbox = tk.Listbox(
-            left,
+            list_frame,
             height=12,
-            width=26,
-            bg="#161b22",
-            fg="white",
-            selectbackground="#238636",
-            selectforeground="white",
-            borderwidth=0,
-            highlightthickness=0,
         )
-        self.listbox.pack(fill="y", expand=False)
-        self.listbox.bind("<<ListboxSelect>>", self.on_select)
+        self.listbox.pack(side="left", fill="both", expand=True)
 
-        btn_row: tk.Frame = tk.Frame(left, bg="#0d1117")
-        btn_row.pack(pady=8)
-
-        add_btn: tk.Button = tk.Button(
-            btn_row,
-            text="+ New",
-            command=self.new_identity,
-            bg="#238636",
-            fg="white",
-            activebackground="#2ea043",
-            relief="flat",
-            width=8,
+        scrollbar: ttk.Scrollbar = ttk.Scrollbar(
+            list_frame,
+            orient="vertical",
+            command=self.listbox.yview,
         )
-        add_btn.pack(side="left", padx=3)
-
-        del_btn: tk.Button = tk.Button(
-            btn_row,
-            text="Delete",
-            command=self.delete_identity,
-            bg="#8b0000",
-            fg="white",
-            activebackground="#a11",
-            relief="flat",
-            width=8,
-        )
-        del_btn.pack(side="left", padx=3)
+        scrollbar.pack(side="right", fill="y")
+        self.listbox.configure(yscrollcommand=scrollbar.set)
+        self.listbox.bind("<<ListboxSelect>>", self._on_listbox_select)
 
         # Right: form
-        form: tk.Frame = tk.Frame(body, bg="#0d1117")
-        form.pack(side="left", fill="both", expand=True, padx=(16, 4))
-
-        pad = {"padx": 4, "pady": 4}
-
-        tk.Label(form, text="Profile name:", bg="#0d1117", fg="white").grid(
-            row=0, column=0, sticky="w", **pad
+        form_frame: ttk.LabelFrame = ttk.LabelFrame(
+            main_frame,
+            text="Details",
+            padding=12,
         )
-        self.entry_name: tk.Entry = tk.Entry(form, width=40)
-        self.entry_name.grid(row=0, column=1, **pad)
+        form_frame.pack(side="left", fill="both", expand=True, padx=(12, 0))
 
-        tk.Label(form, text="Git user.name:", bg="#0d1117", fg="white").grid(
-            row=1, column=0, sticky="w", **pad
-        )
-        self.entry_git_name: tk.Entry = tk.Entry(form, width=40)
-        self.entry_git_name.grid(row=1, column=1, **pad)
+        # Name
+        name_label: ttk.Label = ttk.Label(form_frame, text="Profile name")
+        name_label.grid(row=0, column=0, sticky="w")
+        self.name_entry: ttk.Entry = ttk.Entry(form_frame, width=32)
+        self.name_entry.grid(row=1, column=0, sticky="ew", pady=(0, 8))
 
-        tk.Label(form, text="Git user.email:", bg="#0d1117", fg="white").grid(
-            row=2, column=0, sticky="w", **pad
-        )
-        self.entry_git_email: tk.Entry = tk.Entry(form, width=40)
-        self.entry_git_email.grid(row=2, column=1, **pad)
+        # Git name
+        git_name_label: ttk.Label = ttk.Label(form_frame, text="Git user.name")
+        git_name_label.grid(row=2, column=0, sticky="w")
+        self.git_name_entry: ttk.Entry = ttk.Entry(form_frame, width=32)
+        self.git_name_entry.grid(row=3, column=0, sticky="ew", pady=(0, 8))
 
-        tk.Label(form, text="SSH key path:", bg="#0d1117", fg="white").grid(
-            row=3, column=0, sticky="w", **pad
-        )
+        # Git email
+        git_email_label: ttk.Label = ttk.Label(form_frame, text="Git user.email")
+        git_email_label.grid(row=4, column=0, sticky="w")
+        self.git_email_entry: ttk.Entry = ttk.Entry(form_frame, width=32)
+        self.git_email_entry.grid(row=5, column=0, sticky="ew", pady=(0, 8))
 
-        ssh_row: tk.Frame = tk.Frame(form, bg="#0d1117")
-        ssh_row.grid(row=3, column=1, sticky="w", **pad)
-
-        self.entry_ssh_key: tk.Entry = tk.Entry(ssh_row, width=30)
-        self.entry_ssh_key.pack(side="left")
-
-        browse_btn: tk.Button = tk.Button(
-            ssh_row,
+        # SSH key
+        ssh_key_label: ttk.Label = ttk.Label(form_frame, text="SSH key path")
+        ssh_key_label.grid(row=6, column=0, sticky="w")
+        ssh_frame: ttk.Frame = ttk.Frame(form_frame)
+        ssh_frame.grid(row=7, column=0, sticky="ew", pady=(0, 8))
+        self.ssh_key_entry: ttk.Entry = ttk.Entry(ssh_frame, width=32)
+        self.ssh_key_entry.pack(side="left", fill="x", expand=True)
+        browse_button: ttk.Button = ttk.Button(
+            ssh_frame,
             text="Browse…",
-            command=self.browse_ssh_key,
-            bg="#21262d",
-            fg="white",
-            activebackground="#30363d",
-            relief="flat",
-            width=10,
+            command=self._browse_ssh_key,
         )
-        browse_btn.pack(side="left", padx=4)
+        browse_button.pack(side="left", padx=(4, 0))
 
-        save_btn: tk.Button = tk.Button(
-            form,
+        form_frame.columnconfigure(0, weight=1)
+
+        # Bottom buttons
+        button_frame: ttk.Frame = ttk.Frame(form_frame)
+        button_frame.grid(row=8, column=0, sticky="ew", pady=(12, 0))
+
+        new_button: ttk.Button = ttk.Button(
+            button_frame,
+            text="New",
+            command=self._on_new,
+        )
+        new_button.pack(side="left")
+
+        save_button: ttk.Button = ttk.Button(
+            button_frame,
             text="Save",
-            command=self.save_identity,
-            bg="#238636",
-            fg="white",
-            activebackground="#2ea043",
-            relief="flat",
-            width=14,
+            command=self._on_save,
         )
-        save_btn.grid(row=4, column=1, sticky="e", pady=(16, 4))
+        save_button.pack(side="left", padx=(8, 0))
 
-        self.refresh_list()
-        self.clear_form()
-
-    # ---- UI actions ---- #
+        delete_button: ttk.Button = ttk.Button(
+            button_frame,
+            text="Delete",
+            command=self._on_delete,
+        )
+        delete_button.pack(side="right")
 
     def refresh_list(self) -> None:
         self.listbox.delete(0, tk.END)
-        for ident in self.get_identities():
-            label: str = f"{ident.get('name', '')} ({ident.get('git_email', '')})"
+        identities: List[Dict] = self.get_identities()
+        for index, ident in enumerate(identities):
+            label: str = "{0}: {1}".format(
+                index + 1,
+                ident.get("name", "Unnamed"),
+            )
             self.listbox.insert(tk.END, label)
 
     def clear_form(self) -> None:
         self.current_index = None
-        self.entry_name.delete(0, tk.END)
-        self.entry_git_name.delete(0, tk.END)
-        self.entry_git_email.delete(0, tk.END)
-        self.entry_ssh_key.delete(0, tk.END)
-        # default suggestion
-        self.entry_ssh_key.insert(0, "~/.ssh/id_ed25519")
+        self.name_entry.delete(0, tk.END)
+        self.git_name_entry.delete(0, tk.END)
+        self.git_email_entry.delete(0, tk.END)
+        self.ssh_key_entry.delete(0, tk.END)
 
-    def new_identity(self) -> None:
-        self.listbox.selection_clear(0, tk.END)
-        self.clear_form()
-
-    def on_select(self, _event=None) -> None:
-        selection = self.listbox.curselection()
-        if not selection:
+    def _on_listbox_select(self, event: tk.Event) -> None:  # type: ignore[override]
+        try:
+            selection_index: int = self.listbox.curselection()[0]
+        except IndexError:
             return
-        index: int = selection[0]
-        self.current_index = index
+
         identities: List[Dict] = self.get_identities()
-        ident: Dict = identities[index]
+        if selection_index < 0 or selection_index >= len(identities):
+            return
 
-        self.entry_name.delete(0, tk.END)
-        self.entry_name.insert(0, ident.get("name", ""))
+        self.current_index = selection_index
+        ident: Dict = identities[selection_index]
 
-        self.entry_git_name.delete(0, tk.END)
-        self.entry_git_name.insert(0, ident.get("git_name", ""))
+        self.name_entry.delete(0, tk.END)
+        self.name_entry.insert(0, ident.get("name", ""))
 
-        self.entry_git_email.delete(0, tk.END)
-        self.entry_git_email.insert(0, ident.get("git_email", ""))
+        self.git_name_entry.delete(0, tk.END)
+        self.git_name_entry.insert(0, ident.get("git_name", ""))
 
-        self.entry_ssh_key.delete(0, tk.END)
-        self.entry_ssh_key.insert(0, ident.get("ssh_key", ""))
+        self.git_email_entry.delete(0, tk.END)
+        self.git_email_entry.insert(0, ident.get("git_email", ""))
 
-    def browse_ssh_key(self) -> None:
-        initial_dir: str = os.path.expanduser("~/.ssh")
+        self.ssh_key_entry.delete(0, tk.END)
+        self.ssh_key_entry.insert(0, ident.get("ssh_key", ""))
+
+    def _browse_ssh_key(self) -> None:
+        initial_dir: str = os.path.expanduser("~")
         path: str = filedialog.askopenfilename(
-            title="Select SSH key",
+            title="Select SSH private key",
             initialdir=initial_dir,
         )
-        if path:
-            self.entry_ssh_key.delete(0, tk.END)
-            self.entry_ssh_key.insert(0, path)
+        if path is None or path == "":
+            return
+        self.ssh_key_entry.delete(0, tk.END)
+        self.ssh_key_entry.insert(0, path)
 
-    def save_identity(self) -> None:
-        name: str = self.entry_name.get().strip()
-        git_name: str = self.entry_git_name.get().strip()
-        git_email: str = self.entry_git_email.get().strip()
-        ssh_key: str = self.entry_ssh_key.get().strip()
+    def _on_new(self) -> None:
+        self.clear_form()
+        self.name_entry.focus_set()
 
-        if not name or not git_name or not git_email or not ssh_key:
-            messagebox.showerror("Missing fields", "All fields are required.")
+    def _on_save(self) -> None:
+        name: str = self.name_entry.get().strip()
+        git_name: str = self.git_name_entry.get().strip()
+        git_email: str = self.git_email_entry.get().strip()
+        ssh_key: str = self.ssh_key_entry.get().strip()
+
+        if name == "" or git_name == "" or git_email == "" or ssh_key == "":
+            messagebox.showwarning(
+                "Missing fields",
+                "Please fill in all fields (profile name, Git name, email, SSH key).",
+            )
             return
 
         identities: List[Dict] = self.get_identities()
-        new_ident: Dict = {
+
+        new_identity: Dict = {
             "name": name,
             "git_name": git_name,
             "git_email": git_email,
@@ -333,27 +357,52 @@ class ConfigView(tk.Frame):
         }
 
         if self.current_index is None:
-            identities.append(new_ident)
+            identities.append(new_identity)
         else:
-            identities[self.current_index] = new_ident
+            identities[self.current_index] = new_identity
 
         self.set_identities(identities)
         self.refresh_list()
+        self._select_last_or_current()
+
+    def _select_last_or_current(self) -> None:
+        identities: List[Dict] = self.get_identities()
+        if len(identities) == 0:
+            self.current_index = None
+            return
 
         if self.current_index is None:
             self.current_index = len(identities) - 1
-            self.listbox.selection_set(self.current_index)
 
-    def delete_identity(self) -> None:
+        index: int = self.current_index
+        if index < 0:
+            index = 0
+        if index >= len(identities):
+            index = len(identities) - 1
+
+        self.listbox.selection_clear(0, tk.END)
+        self.listbox.selection_set(index)
+        self.listbox.see(index)
+
+    def _on_delete(self) -> None:
         if self.current_index is None:
+            messagebox.showwarning(
+                "No selection",
+                "Select a profile to delete from the list on the left.",
+            )
             return
+
         identities: List[Dict] = self.get_identities()
+        if self.current_index < 0 or self.current_index >= len(identities):
+            return
+
         ident: Dict = identities[self.current_index]
 
-        if not messagebox.askyesno(
+        confirm: bool = messagebox.askyesno(
             "Delete identity",
-            f"Remove profile:\n\n{ident.get('name', '')}?",
-        ):
+            "Remove profile:\n\n{0}?".format(ident.get("name", "")),
+        )
+        if not confirm:
             return
 
         del identities[self.current_index]
