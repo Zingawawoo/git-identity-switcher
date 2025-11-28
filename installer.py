@@ -30,10 +30,12 @@ def copy_app_files(source_dir: Path, target_dir: Path) -> None:
     if not target_dir.exists():
         target_dir.mkdir(parents=True, exist_ok=True)
 
+    # ✅ include config_dialog.py now that we're using Qt dialogs
     python_files = [
         "identity_switcher.py",
         "model.py",
         "views.py",
+        "config_dialog.py",
     ]
 
     for name in python_files:
@@ -53,6 +55,16 @@ def copy_app_files(source_dir: Path, target_dir: Path) -> None:
             shutil.rmtree(icons_dst)
         shutil.copytree(icons_src, icons_dst)
         print("[INFO] Copied icons to", icons_dst)
+
+    # ✅ Copy styles directory (for neon.qss)
+    styles_src: Path = source_dir / "styles"
+    styles_dst: Path = target_dir / "styles"
+
+    if styles_src.exists() and styles_src.is_dir():
+        if styles_dst.exists():
+            shutil.rmtree(styles_dst)
+        shutil.copytree(styles_src, styles_dst)
+        print("[INFO] Copied styles to", styles_dst)
 
 
 def find_icon(target_dir: Path) -> Optional[Path]:

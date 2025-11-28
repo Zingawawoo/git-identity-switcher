@@ -3,124 +3,105 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-import sys
 from pathlib import Path
-from typing import List, Dict
+from typing import Dict, List
 
 
-APP_DIR_NAME: str = "git-identity-switcher"
-APP_NAME_WIN: str = "GitIdentitySwitcher"
+BASE_DIR: Path = Path(__file__).resolve().parent
+CONFIG_FILE: Path = BASE_DIR / "identities.json"
 
 
-def run(cmd: str) -> None:
+class SSHKeyNotFoundError(Exception):
     """
-    Run a shell command.
-    Uses shell=True for simplicity since commands differ per platform.
+    Raised when the configured SSH key file does not exist.
     """
-    subprocess.call(cmd, shell=True)
 
 
-def get_config_dir() -> Path:
+def run(command: str) -> None:
     """
-    Return the directory where identities.json should live,
-    in a cross-platform way.
+    Run a shell command and ignore the exit code.
+
+    This is intentionally simple because different platforms
+    may have different SSH / Git setups.
     """
-    if sys.platform == "win32":
-        appdata: str | None = os.environ.get("APPDATA")
-        if appdata is not None:
-            base: Path = Path(appdata)
-        else:
-            base = Path.home() / "AppData" / "Roaming"
-        return base / APP_NAME_WIN
-    else:
-        xdg_config_home: str | None = os.environ.get("XDG_CONFIG_HOME")
-        if xdg_config_home is not None:
-            base = Path(xdg_config_home)
-        else:
-            base = Path.home() / ".config"
-        return base / APP_DIR_NAME
-
-
-CONFIG_DIR: Path = get_config_dir()
-CONFIG_FILE: Path = CONFIG_DIR / "identities.json"
-
-
-def ensure_config_dir() -> None:
-    """
-    Make sure the configuration directory exists.
-    """
-    if not CONFIG_DIR.exists():
-        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    subprocess.call(command, shell=True)
 
 
 def load_identities() -> List[Dict]:
     """
     Load identities from JSON. Create an empty file if missing.
-    """
-    ensure_config_dir()
 
+    The JSON structure is:
+        { "identities": [ { ... }, ... ] }
+    """
     if not CONFIG_FILE.exists():
         data: Dict[str, List[Dict]] = {"identities": []}
-        with CONFIG_FILE.open("w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2)
+        CONFIG_FILE.write_text(json.dumps(data, indent=2), encoding="utf-8")
         return []
 
-    with CONFIG_FILE.open("r", encoding="utf-8") as f:
-        data: Dict = json.load(f)
+    raw: str = CONFIG_FILE.read_text(encoding="utf-8")
+    try:
+        data: Dict = json.loads(raw)
+    except json.JSONDecodeError:
+        data = {"identities": []}
 
     identities: List[Dict] = data.get("identities", [])
+    if not isinstance(identities, list):
+        identities = []
+
     return identities
 
 
 def save_identities(identities: List[Dict]) -> None:
     """
-    Persist identities to JSON.
+    Persist identities list to JSON.
     """
-    ensure_config_dir()
-    data: Dict[str, List[Dict]] = {"identities": identities}
-    with CONFIG_FILE.open("w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
+    data: Dict[str, List[Dict]] = {"identities": list(identities)}
+    CONFIG_FILE.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
-def apply_identity(identity: Dict) -> None:
+def apply_identity(identity: Dict) -> str:
     """
     Apply a single identity:
+
     - On Unix: reset ssh-agent keys and add the selected SSH key.
-    - On all platforms: set global git user.name / user.email.
-    - Force git to use this SSH key via core.sshCommand.
+    - Configure Git global user.name and user.email.
+    - Force Git to use the selected SSH key via core.sshCommand.
+
+    Returns a human-readable summary string that the UI can display.
+
+    Raises:
+        SSHKeyNotFoundError: if the SSH key path is missing.
     """
-    from tkinter import messagebox  # imported here to avoid hard Tk dependency
+    ssh_key_raw: str = identity.get("ssh_key", "")
+    git_name: str = identity.get("git_name", "")
+    git_email: str = identity.get("git_email", "")
+    profile_name: str = identity.get("name", "")
 
-    ssh_key_raw: str = identity["ssh_key"]
     ssh_key: str = os.path.expanduser(ssh_key_raw)
-    git_name: str = identity["git_name"]
-    git_email: str = identity["git_email"]
 
-    if not os.path.exists(ssh_key):
-        messagebox.showerror(
-            "SSH key not found",
-            "SSH key file does not exist:\n{0}".format(ssh_key),
-        )
-        return
+    if ssh_key == "" or not os.path.exists(ssh_key):
+        raise SSHKeyNotFoundError(f"SSH key file does not exist: {ssh_key}")
 
-    # Platform-specific ssh-agent handling
-    if sys.platform != "win32":
-        # Reset ssh-agent identities
+    # Unix-style ssh-agent handling – safe to no-op on Windows
+    if os.name != "nt":
         run("ssh-add -D")
-        # Load the selected key
-        run('ssh-add "{0}"'.format(ssh_key))
+        run(f'ssh-add "{ssh_key}"')
 
-    # Configure Git identity (cross-platform)
-    run('git config --global user.name "{0}"'.format(git_name))
-    run('git config --global user.email "{0}"'.format(git_email))
+    # Git identity
+    if git_name != "":
+        run(f'git config --global user.name "{git_name}"')
 
-    # Force Git to use the selected key for all remotes
-    run('git config --global core.sshCommand "ssh -i \\"{0}\\""'.format(ssh_key))
+    if git_email != "":
+        run(f'git config --global user.email "{git_email}"')
 
-    messagebox.showinfo(
-        "Identity switched",
+    # Force Git to use the selected key (works with Git for Windows too)
+    run(f'git config --global core.sshCommand "ssh -i \\"{ssh_key}\\""')
+
+    summary: str = (
         "Now using:\n\n"
-        "Profile: {0}\n"
-        "Git name: {1}\n"
-        "Email: {2}".format(identity["name"], git_name, git_email),
+        f"Profile: {profile_name}\n"
+        f"Git name: {git_name}\n"
+        f"Email: {git_email}"
     )
+    return summary
