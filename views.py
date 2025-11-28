@@ -3,54 +3,54 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from PySide6.QtCore import QEasingCurve, QPropertyAnimation, Qt
+from PySide6.QtCore import QEasingCurve, QPropertyAnimation, Qt, QTimer
 from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtWidgets import (
-    QAbstractItemView,
-    QFrame,
-    QGraphicsOpacityEffect,
     QHBoxLayout,
     QLabel,
     QMainWindow,
-    QMessageBox,
-    QPushButton,
-    QTableWidget,
-    QTableWidgetItem,
+    QScrollArea,
     QVBoxLayout,
     QWidget,
+    QGraphicsOpacityEffect,
 )
 
-from config_dialog import ConfigDialog
 from model import SSHKeyNotFoundError, apply_identity, load_identities, save_identities
+from widgets import AddIdentityCard, GlassFrame, IdentityCard
 
 
 class MainWindow(QMainWindow):
     """
-    Main neon window: logo + identity list + quick actions.
+    Main neon window:
+    - Splash animation on startup
+    - Identity cards in the middle (PS login vibes)
+    - Inline select / edit / delete flows
     """
 
     def __init__(self) -> None:
         super().__init__()
 
         self.setWindowTitle("Git Identity Switcher")
-        self.resize(920, 520)
-        self.setMinimumSize(820, 440)
-        self.setAttribute(Qt.WA_StyledBackground, True)
+        # Fixed size, no resize / maximize.
+        self.setFixedSize(1100, 620)
+        self.setWindowFlag(Qt.WindowMaximizeButtonHint, False)
 
-        # data
         self._identities: List[Dict] = load_identities()
         self._logo_pixmap: Optional[QPixmap] = None
 
-        # animation members must be kept on self so they are not GC'd
-        self._fade_effect: Optional[QGraphicsOpacityEffect] = None
-        self._fade_anim: Optional[QPropertyAnimation] = None
+        self._cards_container: Optional[QWidget] = None
+        self._cards_layout: Optional[QHBoxLayout] = None
+        self._status_label: Optional[QLabel] = None
+
+        self._splash: Optional[QWidget] = None
+        self._splash_anim: Optional[QPropertyAnimation] = None
 
         self._build_ui()
         self._load_logo()
-        self._populate_table()
-        self._fade_in()
+        self._rebuild_cards()
+        self._show_splash()
 
-    # ---------- UI ---------- #
+    # ---------- UI construction ---------- #
 
     def _build_ui(self) -> None:
         central: QWidget = QWidget(self)
@@ -58,15 +58,14 @@ class MainWindow(QMainWindow):
         root_layout.setContentsMargins(18, 18, 18, 18)
         root_layout.setSpacing(12)
 
-        # Top: header card
-        header_card: QFrame = QFrame(central)
-        header_card.setObjectName("headerCard")
+        # Header card with logo + text
+        header_card: GlassFrame = GlassFrame(central, variant="header")
         header_layout: QHBoxLayout = QHBoxLayout(header_card)
         header_layout.setContentsMargins(16, 16, 16, 16)
         header_layout.setSpacing(16)
 
         self.logo_label: QLabel = QLabel(header_card)
-        self.logo_label.setFixedSize(200, 200)
+        self.logo_label.setFixedSize(160, 160)
         self.logo_label.setScaledContents(True)
         header_layout.addWidget(self.logo_label)
 
@@ -87,70 +86,49 @@ class MainWindow(QMainWindow):
 
         root_layout.addWidget(header_card)
 
-        # Middle: main glass area
-        main_row: QHBoxLayout = QHBoxLayout()
-        main_row.setSpacing(16)
+        # Middle: scrollable row of identity cards
+        cards_frame: GlassFrame = GlassFrame(central, variant="glass")
+        cards_layout_outer: QVBoxLayout = QVBoxLayout(cards_frame)
+        cards_layout_outer.setContentsMargins(12, 12, 12, 12)
+        cards_layout_outer.setSpacing(8)
 
-        # Identities glass card
-        table_card: QFrame = QFrame(central)
-        table_card.setObjectName("glassCard")
-        table_layout: QVBoxLayout = QVBoxLayout(table_card)
-        table_layout.setContentsMargins(12, 12, 12, 12)
-        table_layout.setSpacing(6)
-
-        list_label: QLabel = QLabel("Identities", table_card)
+        list_label: QLabel = QLabel("Identities", cards_frame)
         list_label.setProperty("class", "sectionTitle")
-        table_layout.addWidget(list_label)
+        cards_layout_outer.addWidget(list_label)
 
-        self.table: QTableWidget = QTableWidget(0, 2, table_card)
-        self.table.setHorizontalHeaderLabels(["Profile", "Email"])
-        self.table.verticalHeader().setVisible(False)
-        self.table.horizontalHeader().setStretchLastSection(True)
-        self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.table.setSelectionMode(QAbstractItemView.SingleSelection)
-        self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        table_layout.addWidget(self.table)
+        scroll: QScrollArea = QScrollArea(cards_frame)
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QScrollArea.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
-        main_row.addWidget(table_card, 3)
+        self._cards_container = QWidget(scroll)
+        self._cards_layout = QHBoxLayout(self._cards_container)
+        self._cards_layout.setContentsMargins(4, 4, 4, 4)
+        self._cards_layout.setSpacing(16)
+        self._cards_layout.addStretch(1)
 
-        # Quick actions glass card
-        actions_card: QFrame = QFrame(central)
-        actions_card.setObjectName("glassCard")
-        actions_layout: QVBoxLayout = QVBoxLayout(actions_card)
-        actions_layout.setContentsMargins(12, 12, 12, 12)
-        actions_layout.setSpacing(10)
+        scroll.setWidget(self._cards_container)
+        cards_layout_outer.addWidget(scroll)
 
-        actions_title: QLabel = QLabel("Quick actions", actions_card)
-        actions_title.setProperty("class", "sectionTitle")
-        actions_layout.addWidget(actions_title)
-
-        self.switch_btn: QPushButton = QPushButton(
-            "Switch to selected identity",
-            actions_card,
-        )
-        self.switch_btn.setProperty("class", "accent")
-        self.switch_btn.clicked.connect(self._on_switch_identity)
-
-        manage_btn: QPushButton = QPushButton("Manage identities…", actions_card)
-        manage_btn.setProperty("class", "secondary")
-        manage_btn.clicked.connect(self._on_manage_identities)
-
-        actions_layout.addWidget(self.switch_btn)
-        actions_layout.addWidget(manage_btn)
-        actions_layout.addStretch(1)
-
-        main_row.addWidget(actions_card, 1)
-
-        root_layout.addLayout(main_row)
+        root_layout.addWidget(cards_frame, 1)
 
         # Bottom status line
-        self.status_label: QLabel = QLabel("", central)
-        self.status_label.setObjectName("statusLabel")
-        root_layout.addWidget(self.status_label)
+        status_frame: GlassFrame = GlassFrame(central, variant="glass")
+        status_layout: QHBoxLayout = QHBoxLayout(status_frame)
+        status_layout.setContentsMargins(12, 6, 12, 6)
+        status_layout.setSpacing(8)
+
+        self._status_label = QLabel("", status_frame)
+        self._status_label.setObjectName("statusLabel")
+        status_layout.addWidget(self._status_label)
+        status_layout.addStretch(1)
+
+        root_layout.addWidget(status_frame)
 
         self.setCentralWidget(central)
 
-    # ---------- data ---------- #
+    # ---------- logo / identities ---------- #
 
     def _load_logo(self) -> None:
         base_dir: Path = Path(__file__).resolve().parent
@@ -160,87 +138,143 @@ class MainWindow(QMainWindow):
             self.logo_label.setPixmap(self._logo_pixmap)
             self.setWindowIcon(QIcon(self._logo_pixmap))
 
-    def _populate_table(self) -> None:
-        self.table.setRowCount(0)
-        for row, ident in enumerate(self._identities):
-            self.table.insertRow(row)
-            profile_item: QTableWidgetItem = QTableWidgetItem(
-                ident.get("name", "Unnamed"),
+    def _rebuild_cards(self) -> None:
+        if self._cards_container is None or self._cards_layout is None:
+            return
+
+        # Clear layout except trailing stretch
+        while self._cards_layout.count() > 1:
+            item = self._cards_layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+
+        for index, ident in enumerate(self._identities):
+            card: IdentityCard = IdentityCard(
+                index=index,
+                identity=ident,
+                on_select=self._select_identity,
+                on_update=self._update_identity,
+                on_delete=self._delete_identity,
+                parent=self._cards_container,
             )
-            email_item: QTableWidgetItem = QTableWidgetItem(
-                ident.get("git_email", ""),
-            )
-            self.table.setItem(row, 0, profile_item)
-            self.table.setItem(row, 1, email_item)
+            card.setFixedSize(280, 220)
+            self._cards_layout.insertWidget(self._cards_layout.count() - 1, card)
+
+        # Add "new identity" card at end
+        add_card: AddIdentityCard = AddIdentityCard(
+            on_add=self._create_identity,
+            parent=self._cards_container,
+        )
+        add_card.setFixedSize(230, 180)
+        self._cards_layout.insertWidget(self._cards_layout.count() - 1, add_card)
 
         count: int = len(self._identities)
         if count == 0:
-            self.status_label.setText(
-                "No identities yet. Click “Manage identities…” to create one.",
-            )
-            self.switch_btn.setEnabled(False)
+            self._set_status("No identities yet. Click “+ New identity” to create one.")
         else:
-            self.status_label.setText(f"Configured identities: {count}")
-            self.switch_btn.setEnabled(True)
+            self._set_status(f"Configured identities: {count}")
 
-    # ---------- actions ---------- #
+    # ---------- status helper ---------- #
 
-    def _current_index(self) -> Optional[int]:
-        row: int = self.table.currentRow()
-        if row < 0 or row >= len(self._identities):
-            return None
-        return row
+    def _set_status(self, text: str) -> None:
+        if self._status_label is not None:
+            self._status_label.setText(text)
 
-    def _on_switch_identity(self) -> None:
-        index: Optional[int] = self._current_index()
-        if index is None:
-            QMessageBox.warning(
-                self,
-                "No selection",
-                "Select an identity from the list first.",
-            )
+    # ---------- callbacks from cards ---------- #
+
+    def _select_identity(self, index: int) -> None:
+        if index < 0 or index >= len(self._identities):
             return
 
         identity: Dict = self._identities[index]
         try:
             summary: str = apply_identity(identity)
         except SSHKeyNotFoundError as exc:
-            QMessageBox.critical(
-                self,
-                "SSH key not found",
-                str(exc),
-            )
+            self._set_status(f"SSH key not found: {exc}")
             return
 
-        QMessageBox.information(
-            self,
-            "Identity switched",
-            summary,
-        )
+        self._set_status(summary)
 
-    def _on_manage_identities(self) -> None:
-        dialog: ConfigDialog = ConfigDialog(self, identities=self._identities)
-        dialog.exec()
-        self._identities = dialog.get_identities()
+    def _update_identity(self, index: int, updated: Dict) -> None:
+        if index < 0 or index >= len(self._identities):
+            return
+
+        self._identities[index] = updated
         save_identities(self._identities)
-        self._populate_table()
+        self._rebuild_cards()
+        name: str = updated.get("name", "Unnamed")
+        self._set_status(f"Updated identity “{name or 'Unnamed'}”")
 
-    # ---------- animation ---------- #
+    def _delete_identity(self, index: int) -> None:
+        if index < 0 or index >= len(self._identities):
+            return
 
-    def _fade_in(self) -> None:
+        ident: Dict = self._identities.pop(index)
+        save_identities(self._identities)
+        self._rebuild_cards()
+        name: str = ident.get("name", "Unnamed")
+        self._set_status(f"Deleted identity “{name or 'Unnamed'}”")
+
+    def _create_identity(self) -> None:
+        # Simple default; user edits inline afterwards
+        new: Dict = {
+            "name": "New profile",
+            "git_name": "",
+            "git_email": "",
+            "ssh_key_path": "",
+        }
+        self._identities.append(new)
+        save_identities(self._identities)
+        self._rebuild_cards()
+        self._set_status("New identity created. Click it to edit.")
+
+    # ---------- splash animation ---------- #
+
+    def _show_splash(self) -> None:
         """
-        Fade-in animation for the whole window.
-
-        IMPORTANT: keep references on self so the animation is not
-        garbage-collected while running; otherwise opacity could stay at 0.
+        Simple overlay: large GIS logo fades out, then reveals cards.
         """
-        self._fade_effect = QGraphicsOpacityEffect(self)
-        self.setGraphicsEffect(self._fade_effect)
+        if self._logo_pixmap is None:
+            return  # nothing fancy if we have no logo
 
-        self._fade_anim = QPropertyAnimation(self._fade_effect, b"opacity", self)
-        self._fade_anim.setDuration(260)
-        self._fade_anim.setStartValue(0.0)
-        self._fade_anim.setEndValue(1.0)
-        self._fade_anim.setEasingCurve(QEasingCurve.OutCubic)
+        self._splash = QWidget(self)
+        self._splash.setObjectName("splashOverlay")
+        self._splash.setAttribute(Qt.WA_StyledBackground, True)
+        self._splash.setGeometry(self.rect())
 
-        self._fade_anim.start()
+        layout: QVBoxLayout = QVBoxLayout(self._splash)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        layout.setAlignment(Qt.AlignCenter)
+
+        logo_label: QLabel = QLabel(self._splash)
+        logo_label.setPixmap(self._logo_pixmap.scaled(
+            260,
+            260,
+            Qt.KeepAspectRatio,
+            Qt.SmoothTransformation,
+        ))
+        layout.addWidget(logo_label)
+
+        effect: QGraphicsOpacityEffect = QGraphicsOpacityEffect(self._splash)
+        self._splash.setGraphicsEffect(effect)
+
+        self._splash_anim = QPropertyAnimation(effect, b"opacity", self)
+        self._splash_anim.setDuration(520)
+        self._splash_anim.setStartValue(1.0)
+        self._splash_anim.setEndValue(0.0)
+        self._splash_anim.setEasingCurve(QEasingCurve.OutCubic)
+        self._splash_anim.finished.connect(self._hide_splash)
+
+        self._splash.show()
+        self._splash.raise_()
+
+        # Let the user see the logo briefly, then fade out.
+        QTimer.singleShot(500, self._splash_anim.start)
+
+    def _hide_splash(self) -> None:
+        if self._splash is not None:
+            self._splash.hide()
+            self._splash.deleteLater()
+            self._splash = None

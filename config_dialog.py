@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Dict, List, Optional
+from widgets import NeonButton
 
 from PySide6.QtCore import QEasingCurve, QPoint, QPropertyAnimation, Qt
 from PySide6.QtWidgets import (
@@ -122,13 +123,22 @@ class ConfigDialog(QDialog):
 
         # Buttons row
         buttons_row: QHBoxLayout = QHBoxLayout()
-        new_btn: QPushButton = QPushButton("New", right_panel)
-        save_btn: QPushButton = QPushButton("Save", right_panel)
-        delete_btn: QPushButton = QPushButton("Delete", right_panel)
 
-        new_btn.setProperty("class", "secondary")
-        save_btn.setProperty("class", "accent")
-        delete_btn.setProperty("class", "danger")
+        new_btn: NeonButton = NeonButton(
+            "New",
+            right_panel,
+            variant="secondary",
+        )
+        save_btn: NeonButton = NeonButton(
+            "Save",
+            right_panel,
+            variant="accent",
+        )
+        delete_btn: NeonButton = NeonButton(
+            "Delete",
+            right_panel,
+            variant="danger",
+        )
 
         new_btn.clicked.connect(self._on_new)
         save_btn.clicked.connect(self._on_save)
@@ -136,15 +146,9 @@ class ConfigDialog(QDialog):
 
         buttons_row.addWidget(new_btn)
         buttons_row.addWidget(save_btn)
-        buttons_row.addStretch(1)
         buttons_row.addWidget(delete_btn)
 
-        row += 1
-        form.addItem(QSpacerItem(0, 10))
-        row += 1
         form.addLayout(buttons_row, row, 0, 1, 2)
-
-        root_layout.addWidget(right_panel, 2)
 
     # ---------- data helpers ---------- #
 

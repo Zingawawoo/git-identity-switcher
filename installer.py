@@ -36,6 +36,7 @@ def copy_app_files(source_dir: Path, target_dir: Path) -> None:
         "model.py",
         "views.py",
         "config_dialog.py",
+        "widgets.py"
     ]
 
     for name in python_files:
