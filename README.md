@@ -6,7 +6,7 @@ This README explains **how to install, run, and use the app** on Linux (includin
 
 ---
 
-# 📦 Features
+# Features
 
 * Store multiple Git profiles
 * Switch Git `user.name`, `user.email`, and preferred SSH key with one click
@@ -16,11 +16,11 @@ This README explains **how to install, run, and use the app** on Linux (includin
 
 ---
 
-# 🚀 Installation
+# Installation
 
 ## Linux (Fedora, Bazzite, Ubuntu, Arch, Debian, Distrobox)
 
-### 🔧 Inside a Distrobox (recommended)
+### Inside a Distrobox (Not really recommended, more just for Bazzite users)
 
 If you are using Bazzite, Silverblue, or an rpm‑ostree based distro, **run the app from inside a Distrobox container**.
 
@@ -53,7 +53,7 @@ If you are using Bazzite, Silverblue, or an rpm‑ostree based distro, **run the
 
 ---
 
-### 🐧 Standard Linux install (no Distrobox)
+### Standard Linux install (no Distrobox)
 
 If you are not using Distrobox and want the app on your native system:
 
@@ -77,7 +77,7 @@ No further setup required.
 
 ---
 
-# 🪟 Windows Installation
+# Windows Installation
 
 1. Install Python 3.10+ from [https://python.org](https://python.org)
 2. Clone or download this repository
@@ -99,10 +99,9 @@ You may create a Start Menu shortcut pointing to:
 %APPDATA%\GitIdentitySwitcher\git-identity-switcher.bat
 ```
 
-<<<<<<< HEAD
 ---
 
-# ▶️ Running the App
+# Running the App
 
 After installation:
 
@@ -134,7 +133,7 @@ Or use your shortcut.
 
 ---
 
-# 🧭 Usage
+# Usage
 
 1. Start the application
 2. Add new identities using the **Manage identities** menu
@@ -153,7 +152,7 @@ When you select an identity and click **Switch**, the app will:
 
 ---
 
-# 🔧 Uninstalling
+# Uninstalling
 
 Run:
 
@@ -170,7 +169,7 @@ This removes:
 
 ---
 
-# 💡 Troubleshooting
+# Troubleshooting
 
 ### App doesn't launch from GNOME/KDE but works in terminal
 
@@ -194,16 +193,13 @@ Check logs (only if logging wrapper is enabled):
 
 ---
 
-# 📜 License
+# License
 
 Licensed under MIT. See `LICENSE` for details.
 
 ---
 
-# 🙌 Contributions
+# Contributions
 
 Contributions and issues are welcome!
 Feel free to submit PRs to improve functionality, UI design, or platform support.
-=======
-I could explain in depth what to do but if you need this tool I assume you already know how ssh keys and git configs work.
->>>>>>> 9fd85a9e717bf6c9c5774c8a65489fcb85871ae1
